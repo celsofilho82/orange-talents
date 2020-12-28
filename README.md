@@ -206,3 +206,117 @@ Retorno
 ![falha](artigo/request-400.png)
 
 No próximo tópico explico como fiz para manipular as mensagens de erro.
+
+### Manipulando exceções
+
+É muito ruim para o consumidor da API receber uma mensagem de erro não tratada, com a stacktrace que só interessa ao desenvolvedor da aplicação. Tudo que o consumidor necessita saber de forma sucinta se o erro retornado está relacionado com os dados enviados por ele ou é um erro interno da aplicação e é por isso que manipular os erros retornados pela API se faz necessário.
+
+#### Definição das classes
+
+A primeira classe que criei é a *FieldErrorOutputDto* nela defini os atributos das mensagens de erro que vamos manipular
+
+Classe *FieldErrorOutputDto*
+
+```
+public class FieldErrorOutputDto {
+
+private String field;
+private String message;
+
+  FieldErrorOutputDto() {
+  }
+
+  public FieldErrorOutputDto(String field, String message) {
+    this.field = field;
+    this.message = message;
+  }
+
+  public String getField() {
+    return field;
+  }
+
+  public String getMessage() {
+    return message;
+  }
+} 
+```
+
+A próxima classe é a *ValidationErrorsOutputDto* que é a classe utilizada na resposta quando houver uma mensagem de erro a ser enviada para o consumidor da API utilizando a classe *FieldErrorOutputDto* que define os campos. Nessa classe também temos o método `getNumberOfErrors()` que informa quantos erros ocorreram ao consumidor da API.
+
+```
+public class ValidationErrorsOutputDto {
+
+private List<String> globalErrorMessages = new ArrayList<>();
+private List<FieldErrorOutputDto> fieldErrors = new ArrayList<>();
+
+  public void addError(String message) {
+    globalErrorMessages.add(message);
+  }
+
+  public void addFieldError(String field, String message) {
+    FieldErrorOutputDto fieldError = new FieldErrorOutputDto(field, message);
+    fieldErrors.add(fieldError);
+  }
+
+  public List<String> getGlobalErrorMessages() {
+    return globalErrorMessages;
+  }
+
+  public List<FieldErrorOutputDto> getErrors() {
+    return fieldErrors;
+  }
+
+  public int getNumberOfErrors() {
+    return this.globalErrorMessages.size() + this.fieldErrors.size();
+  }
+} 
+```
+
+Por último temos a classe *ValidationErrorHandler* que é a classe responsável por realizar a captura dos erros e a manipulação dos mesmos devolvendo para o consumidor da API uma informação de fácil leitura e entendimento. Essa classe é anotada com `@RestControllerAdvice` que é uma união das anotações `@ControllerAdvice + @ResponseBody` e que auxilia na manipulação de exceções `@ExceptionHandler`. Nesta implementação sempre que um exceção for lançada ex: `MethodArgumentNotValidException.class` será interceptada pela classe *ValidationErrorHandler* de forma global e um código de resposta `HTTP Status 400 (Bad Request)` será retornado junto com a mensagem de erro no corpo da requisição mensagem essa, que é gerada através do método `buildValidationErrors()`.
+
+```
+@RestControllerAdvice
+public class ValidationErrorHandler {
+
+@Autowired
+private MessageSource messageSource;
+
+
+  @ResponseStatus(HttpStatus.BAD_REQUEST)
+  @ExceptionHandler(MethodArgumentNotValidException.class)
+  public ValidationErrorsOutputDto handleValidationError(MethodArgumentNotValidException exception) {
+
+    List<ObjectError> globalErrors = exception.getBindingResult().getGlobalErrors();
+    List<FieldError> fieldErrors = exception.getBindingResult().getFieldErrors();
+
+    return buildValidationErrors(globalErrors, fieldErrors);
+  }
+
+  @ResponseStatus(HttpStatus.BAD_REQUEST)
+  @ExceptionHandler(BindException.class)
+  public ValidationErrorsOutputDto handleValidationError(BindException exception) {
+
+    List<ObjectError> globalErrors = exception.getBindingResult().getGlobalErrors();
+    List<FieldError> fieldErrors = exception.getBindingResult().getFieldErrors();
+
+    return buildValidationErrors(globalErrors, fieldErrors);
+  }
+
+  private ValidationErrorsOutputDto buildValidationErrors(List<ObjectError> globalErrors,
+      List<FieldError> fieldErrors) {
+    ValidationErrorsOutputDto validationErrors = new ValidationErrorsOutputDto();
+
+    globalErrors.forEach(error -> validationErrors.addError(getErrorMessage(error)));
+
+    fieldErrors.forEach(error -> {
+      String errorMessage = getErrorMessage(error);
+      validationErrors.addFieldError(error.getField(), errorMessage);
+    });
+    return validationErrors;
+  }
+
+  private String getErrorMessage(ObjectError error) {
+    return messageSource.getMessage(error, LocaleContextHolder.getLocale());
+  }
+}
+```
