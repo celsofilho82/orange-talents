@@ -35,7 +35,15 @@ public class NovoClienteRequest {
 	}
 
 	public Cliente toModel() {
-		return new Cliente(this.nome, this.email, this.cpf, this.dataNascimento);
+		return new Cliente(this.nome, this.getEmail(), this.getCpf(), this.dataNascimento);
+	}
+
+	public String getEmail() {
+		return email;
+	}
+
+	public String getCpf() {
+		return cpf;
 	}
 
 }
