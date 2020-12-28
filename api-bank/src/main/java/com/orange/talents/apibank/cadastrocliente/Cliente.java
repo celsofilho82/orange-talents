@@ -28,6 +28,10 @@ public class Cliente {
 	@Past
 	private LocalDate dataNascimento;
 
+	@Deprecated
+	public Cliente() {
+	}
+
 	public Cliente(@NotBlank String nome, @NotBlank @Email String email, @NotBlank @CPF String cpf,
 			@NotNull @Past LocalDate dataNascimento) {
 		this.nome = nome;
